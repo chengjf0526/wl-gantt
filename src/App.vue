@@ -2,7 +2,15 @@
   <div id="app">
     <img src="./assets/logo.png" />
     <div class="wl-gantt-demo">
-      <wlGantt :data="data" start-date="2019-9-02" end-date="2020-11-24" @timeChange="timeChange"></wlGantt>
+      <wlGantt
+        default-expand-all
+        :data="data"
+        date-type="monthAndDay"
+        start-date="2019-9-02"
+        end-date="2020-11-24"
+        @timeChange="timeChange"
+        @expand-change="expandChange"
+      ></wlGantt>
     </div>
   </div>
 </template>
@@ -26,7 +34,7 @@ export default {
             {
               id: "1-1",
               pid: 1,
-              name: "云台之间",
+              name: "云台之间云台之间云台之间云台之间云台之间云台之间云台之间",
               pre: "1-1-1",
               startDate: "2019-09-01",
               endDate: "2019-09-09",
@@ -59,8 +67,8 @@ export default {
               id: "1-4",
               pid: 1,
               name: "西塘之南",
-              startDate: "2019-12-02",
-              endDate: "2019-12-07"
+              startDate: "2019-10-30",
+              endDate: "2019-11-02"
             },
             {
               pid: 1,
@@ -81,9 +89,14 @@ export default {
     };
   },
   methods: {
+    // 时间发生更改
     timeChange(row) {
       console.log(row);
-    }
+    },
+    // 数表展开行
+    expandChange(row, expanded){
+      console.log(row, expanded)
+    },
   },
   components: {
     wlGantt

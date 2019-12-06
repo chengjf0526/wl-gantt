@@ -1,70 +1,175 @@
 <template>
   <el-table
-    border
-    row-key="id"
     ref="wl-gantt"
     class="wl-gantt"
-    current-row-key="id"
-    default-expand-all
+    :fit="fit"
+    :size="size"
+    :border="border"
     :data="selfData"
+    :stripe="stripe"
+    :height="height"
+    :row-key="rowKey"
+    :row-style="rowStyle"
     :class="dateTypeClass"
+    :cell-style="cellStyle"
+    :max-height="maxHeight"
     :tree-props="selfProps"
-    header-row-class-name="wl-gantt-header"
+    :current-row-key="rowKey"
+    :row-class-name="rowClassName"
+    :cell-class-name="cellClassName"
+    :expand-row-keys="expandRowKeys"
+    :header-row-style="headerRowStyle"
+    :header-cell-style="headerCellStyle"
+    :default-expand-all="defaultExpandAll"
+    :header-row-class-name="headerRowClassName"
+    :highlight-current-row="highlightCurrentRow"
+    :header-cell-class-name="headerCellClassName"
+    @header-contextmenu="handleHeaderContextMenu"
+    @selection-change="handleSelectionChange"
+    @row-contextmenu="handleRowContextMenu"
+    @current-change="handleCurrentChange"
+    @cell-mouse-enter="handleMouseEnter"
+    @cell-mouse-leave="handleMouseLeave"
+    @expand-change="handleExpandChange"
+    @filter-change="handleFilterChange"
+    @cell-dblclick="handleCellDbClick"
+    @header-click="handleHeaderClick"
+    @row-dblclick="handleRowDbClick"
+    @sort-change="handleSortChange"
+    @cell-click="handleCellClick"
+    @select-all="handleSelectAll"
+    @row-click="handleRowClick"
+    @select="handleSelect"
   >
-    <el-table-column :resizable="false" fixed :prop="selfProps.name" width="160" label="名称"></el-table-column>
-    <el-table-column :resizable="false" fixed width="160" :prop="selfProps.startDate" label="开始日期">
+    <slot name="prv"></slot>
+    <el-table-column
+      fixed
+      label="名称"
+      min-width="200"
+      show-overflow-tooltip
+      :prop="selfProps.name"
+      :formatter="nameFormatter"
+    ></el-table-column>
+    <el-table-column
+      :resizable="false"
+      fixed
+      width="160"
+      align="center"
+      :prop="selfProps.startDate"
+      label="开始日期"
+    >
       <template slot-scope="scope">
         <el-date-picker
+          v-if="scope.row._start_edit"
           v-model="scope.row[selfProps.startDate]"
+          @blur="scope.row._start_edit = false"
           @change="startDateChange(scope.row)"
           type="date"
           size="medium"
           class="u-full"
           :clearable="false"
+          ref="wl-start-date"
           value-format="yyyy-MM-dd"
           placeholder="请选择开始日期"
         ></el-date-picker>
+        <span
+          v-else
+          @click="cellEdit(scope.row, '_start_edit', 'wl-start-date')"
+        >{{timeFormat(scope.row[selfProps.startDate])}}</span>
       </template>
     </el-table-column>
-    <el-table-column fixed :resizable="false" width="160" :prop="selfProps.endDate" label="结束日期">
+    <el-table-column
+      fixed
+      :resizable="false"
+      width="160"
+      align="center"
+      :prop="selfProps.endDate"
+      label="结束日期"
+    >
       <template slot-scope="scope">
         <el-date-picker
+          v-if="scope.row._end_edit"
           v-model="scope.row[selfProps.endDate]"
-          @change="endDateChange(scope.row, 'end')"
+          @blur="scope.row._end_edit = false"
+          @change="endDateChange(scope.row)"
           type="date"
           size="medium"
           class="u-full"
           :clearable="false"
+          ref="wl-end-date"
           value-format="yyyy-MM-dd"
           placeholder="请选择结束日期"
         ></el-date-picker>
+        <span
+          v-else
+          @click="cellEdit(scope.row, '_end_edit', 'wl-end-date')"
+        >{{timeFormat(scope.row[selfProps.endDate])}}</span>
       </template>
     </el-table-column>
     <slot></slot>
-    <el-table-column :resizable="false" v-for="year in titleDate" :key="year.id" :label="year.name">
+    <!-- year and mouth gantt -->
+    <template v-if="self_date_type === 'yearAndMonth'">
       <el-table-column
-        class-name="wl-gantt-item"
-        v-for="month in year.children"
         :resizable="false"
-        :key="month.id"
-        :label="month.name"
+        v-for="year in ganttTitleDate"
+        :label="year.name"
+        :key="year.id"
       >
-        <template slot-scope="scope" v-if="dateType === 'yearAndMonth'">
-          <div :class="dayGanttType(scope.row, month.full_date, 'months')"></div>
-        </template>
-        <!-- <el-table-column
-          :resizable="false"
+        <el-table-column
           class-name="wl-gantt-item"
-          v-for="day in month.children"
-          width="40"
-          :key="day.id"
-          :label="day.date">
-            <template slot-scope="scope">
-              <div :class="dayGanttType(scope.row, day.full_date)"></div>
-            </template>
-        </el-table-column>-->
+          v-for="month in year.children"
+          :resizable="false"
+          :key="month.id"
+          :label="month.name"
+        >
+          <template slot-scope="scope">
+            <div :class="dayGanttType(scope.row, month.full_date, 'months')"></div>
+          </template>
+        </el-table-column>
       </el-table-column>
-    </el-table-column>
+    </template>
+    <!-- year and week gantt -->
+    <template v-else-if="self_date_type === 'yearAndWeek'">
+      <el-table-column
+        :resizable="false"
+        v-for="i in ganttTitleDate"
+        :label="i.full_date"
+        :key="i.id"
+      >
+        <el-table-column
+          class-name="wl-gantt-item"
+          v-for="t in i.children"
+          :resizable="false"
+          :key="t.id"
+          :label="t.name"
+        >
+          <template slot-scope="scope">
+            <div :class="dayGanttType(scope.row, t.full_date, 'week')"></div>
+          </template>
+        </el-table-column>
+      </el-table-column>
+    </template>
+    <!-- mouth and day gantt -->
+    <template v-else>
+      <el-table-column
+        :resizable="false"
+        v-for="i in ganttTitleDate"
+        :label="i.full_date"
+        :key="i.id"
+      >
+        <el-table-column
+          class-name="wl-gantt-item"
+          v-for="t in i.children"
+          :resizable="false"
+          :key="t.id"
+          :label="t.name"
+        >
+          <template slot-scope="scope">
+            <div :class="dayGanttType(scope.row, t.full_date)"></div>
+          </template>
+        </el-table-column>
+      </el-table-column>
+    </template>
   </el-table>
 </template>
 
@@ -73,13 +178,7 @@ import dayjs from "dayjs"; // 导入日期js
 const uuidv4 = require("uuid/v4"); // 导入uuid生成插件
 import isBetween from "dayjs/plugin/isBetween";
 dayjs.extend(isBetween);
-import {
-  deepClone,
-  treeToArray,
-  flattenDeep,
-  getMin,
-  getMax
-} from "@/assets/array.js";
+import { deepClone, flattenDeep, getMin, getMax } from "@/assets/array.js";
 export default {
   name: "wlGantt",
   data() {
@@ -87,7 +186,10 @@ export default {
       self_start_date: "", // 项目开始时间
       self_end_date: "", // 项目结束时间
       self_data_list: [], // 一维化后的gantt数据
-      self_id: 1 // 自增id
+      self_date_type: "", // 自身日期类型
+      self_id: 1, // 自增id
+      multipleSelection: [], // 多选数据
+      currentRow: null // 单选数据
     };
   },
   props: {
@@ -132,7 +234,53 @@ export default {
     treatIdAsIdentityId: {
       type: Boolean,
       default: false
-    }
+    },
+    // 自动变化gantt标题日期模式
+    autoGanttDateType: {
+      type: Boolean,
+      default: true
+    },
+    nameFormatter: Function, // 名称列的格式化内容函数
+    // ---------------------------------------------以下为el-table Attributes--------------------------------------------
+    defaultExpandAll: {
+      type: Boolean,
+      default: false
+    }, // 是否全部展开
+    rowKey: {
+      type: String,
+      default: "id"
+    }, // 必须指定key来渲染树形数据
+    height: [String, Number], // 列表高度
+    maxHeight: [String, Number], // 列表最大高度
+    stripe: {
+      type: Boolean,
+      default: false
+    }, // 是否为斑马纹
+    highlightCurrentRow: {
+      type: Boolean,
+      default: false
+    }, // 是否要高亮当前行
+    border: {
+      type: Boolean,
+      default: true
+    }, // 是否带有纵向边框
+    fit: {
+      type: Boolean,
+      default: true
+    }, // 列的宽度是否自撑开
+    size: String, // Table 的尺寸
+    rowClassName: Function, // 行的 className 的回调方法
+    rowStyle: Function, // 行的 style 的回调方法
+    cellClassName: Function, // 单元格的 className 的回调方法
+    cellStyle: Function, // 单元格的 style 的回调方法
+    headerRowClassName: {
+      type: [Function, String],
+      default: "wl-gantt-header"
+    }, // 表头行的 className 的回调方法
+    headerRowStyle: [Function, Object], // 表头行的 style 的回调方法
+    headerCellClassName: [Function, String], // 表头单元格的 className 的回调方法
+    headerCellStyle: [Function, Object], // 表头单元格的 style 的回调方法
+    expandRowKeys: Array // 可以通过该属性设置 Table 目前的展开行
     // 是否使用一维数据组成树
     /* arrayToTree: {
       type: Boolean,
@@ -140,8 +288,8 @@ export default {
     } */
   },
   computed: {
-    // 第一级日期
-    titleDate() {
+    // 甘特图标题日期分配
+    ganttTitleDate() {
       // 分解开始和结束日期
       let start_date_spilt = dayjs(this.self_start_date)
         .format("YYYY-M-D")
@@ -151,95 +299,48 @@ export default {
         .split("-");
       let start_year = Number(start_date_spilt[0]);
       let start_mouth = Number(start_date_spilt[1]);
-      let start_day = Number(start_date_spilt[2]);
       let end_year = Number(end_date_spilt[0]);
       let end_mouth = Number(end_date_spilt[1]);
-      let end_day = Number(end_date_spilt[2]);
-      // 日期数据盒子
-      let dates = [
-        {
-          name: `${start_year}年`,
-          date: start_year,
-          id: uuidv4(),
-          children: []
+      // 自动更新日期类型以适应任务时间范围跨度
+      if (this.autoGanttDateType) {
+        // 计算日期跨度
+        let mouth_diff = this.timeDiffTime(
+          this.self_start_date,
+          this.self_end_date,
+          "months"
+        );
+        if (mouth_diff > 12) {
+          // 12个月以上的分到yearAndMouth
+          this.self_date_type = "yearAndMonth";
+        } else if (mouth_diff > 2) {
+          // 2个月以上的分到yearAndWeek
+          this.self_date_type = "yearAndWeek";
+        } else {
+          this.self_date_type = "monthAndDay";
         }
-      ];
-      // 处理年份
-      let year_diff = end_year - start_year;
-      // 年间隔为同一年
-      if (year_diff === 0) {
-        let mouths = []; // 处理月份
-        let isLeap = this.isLeap(start_year);
-        for (let i = start_mouth; i < end_mouth + 1; i++) {
-          let days = this.generationDays(start_year, i, isLeap);
-          mouths.push({
-            name: `${i}月`,
-            date: i,
-            full_date: `${start_year}-${i}`,
-            id: uuidv4(),
-            children: days
-          });
-        }
-        dates[0].children = mouths;
-        return dates;
       }
-      // 处理开始月份
-      let start_mouths = [];
-      let startIsLeap = this.isLeap(start_year);
-      for (let i = start_mouth; i < 13; i++) {
-        let days = this.generationDays(start_year, i, startIsLeap);
-        start_mouths.push({
-          name: `${i}月`,
-          date: i,
-          full_date: `${start_year}-${i}`,
-          id: uuidv4(),
-          children: days
-        });
-      }
-      // 处理结束月份
-      let end_mouths = [];
-      let endIsLeap = this.isLeap(end_year);
-      for (let i = 1; i < end_mouth + 1; i++) {
-        let days = this.generationDays(end_year, i, endIsLeap);
-        end_mouths.push({
-          name: `${i}月`,
-          date: i,
-          full_date: `${end_year}-${i}`,
-          id: uuidv4(),
-          children: days
-        });
-      }
-      // 年间隔等于一年
-      if (year_diff === 1) {
-        dates[0].children = start_mouths;
-        dates.push({
-          name: `${end_year}年`,
-          date: end_year,
-          children: end_mouths,
-          id: uuidv4()
-        });
-        return dates;
-      }
-      // 年间隔大于1年
-      if (year_diff > 1) {
-        for (let i = 1; i < year_diff; i++) {
-          let item_year = start_year + i;
-          let isLeap = this.isLeap(item_year);
-          let month_and_day = this.generationMonths(item_year, isLeap);
-          dates.push({
-            name: `${item_year}年`,
-            date: item_year,
-            id: uuidv4(),
-            children: month_and_day
-          });
-        }
-        dates.push({
-          name: `${end_year}年`,
-          date: item_year,
-          children: end_mouths,
-          id: uuidv4()
-        });
-        return dates;
+      // 不自动更新日期类型，以dateType固定展示
+      if (this.self_date_type === "yearAndWeek") {
+        return this.yearAndWeekTitleDate(
+          start_year,
+          start_mouth,
+          end_year,
+          end_mouth
+        );
+      } else if (this.self_date_type === "monthAndDay") {
+        return this.mouthAndDayTitleDate(
+          start_year,
+          start_mouth,
+          end_year,
+          end_mouth
+        );
+      } else {
+        return this.yearAndMouthTitleDate(
+          start_year,
+          start_mouth,
+          end_year,
+          end_mouth
+        );
       }
     },
     // 数据
@@ -252,8 +353,8 @@ export default {
     // 树表配置项
     selfProps() {
       return {
-        hasChildren: "hasChildren",
-        children: "children", // children字段
+        hasChildren: "hasChildren", // 字段来指定哪些行是包含子节点
+        children: "children", // children字段来表示有子节点
         name: "name", // 任务名称字段
         id: "id", // id字段
         pid: "pid", // pid字段
@@ -267,11 +368,11 @@ export default {
     },
     // 根据日期类型改样式
     dateTypeClass() {
-      if (this.dateType === "yearAndMonth") {
+      if (this.self_date_type === "yearAndMonth") {
         return "year-and-month";
-      } else if (this.dateType === "monthAndDay") {
+      } else if (this.self_date_type === "monthAndDay") {
         return "month-and-day";
-      } else if (this.dateType === "yearAndWeek") {
+      } else if (this.self_date_type === "yearAndWeek") {
         return "year-and-week";
       }
     }
@@ -301,12 +402,14 @@ export default {
       if (_early_project_start) {
         this.self_start_date = row[this.selfProps.startDate];
       }
+      this.emitTimeChange(row);
     },
     /**
      * 结束时间改变
      * row: object 当前行数据
      */
     endDateChange(row) {
+      this.emitTimeChange(row);
       // 如果开始晚于结束，提示
       /* if (
         this.timeIsBefore(
@@ -324,6 +427,18 @@ export default {
       } */
     },
     /**
+     * 单元格编辑
+     * row: object 当前行数据
+     * key: string 需要操作的字段
+     * ref：object 需要获取焦点的dom
+     */
+    cellEdit(row, key, ref) {
+      row[key] = true;
+      this.$nextTick(() => {
+        this.$refs[ref].focus();
+      });
+    },
+    /**
      * 查询目标是否在父级链或者全部子集中
      * item 当前节点
      * pre 前置节点
@@ -338,19 +453,219 @@ export default {
     },
     // 以下是表格-日期-gantt生成函数----------------------------------------生成gantt表格-------------------------------------
     /**
+     * 年-月模式gantt标题
+     * start_year: 起始年
+     * start_mouth：起始月
+     * end_year：结束年
+     * end_mouth：结束月
+     */
+    yearAndMouthTitleDate(start_year, start_mouth, end_year, end_mouth) {
+      // 日期数据盒子
+      let dates = [
+        {
+          name: `${start_year}年`,
+          date: start_year,
+          id: uuidv4(),
+          children: []
+        }
+      ];
+      // 处理年份
+      let year_diff = end_year - start_year;
+      // 年间隔为同一年
+      if (year_diff === 0) {
+        let isLeap = this.isLeap(start_year); // 是否闰年
+        let mouths = this.generationMonths(
+          start_year,
+          start_mouth,
+          end_mouth + 1,
+          isLeap,
+          false
+        ); // 处理月份
+        dates[0].children = mouths;
+        return dates;
+      }
+      // 处理开始月份
+      let startIsLeap = this.isLeap(start_year);
+      let start_mouths = this.generationMonths(
+        start_year,
+        start_mouth,
+        13,
+        startIsLeap,
+        false
+      );
+      // 处理结束月份
+      let endIsLeap = this.isLeap(end_year);
+      let end_mouths = this.generationMonths(
+        end_year,
+        1,
+        end_mouth + 1,
+        endIsLeap,
+        false
+      );
+      // 年间隔等于一年
+      if (year_diff === 1) {
+        dates[0].children = start_mouths;
+        dates.push({
+          name: `${end_year}年`,
+          date: end_year,
+          children: end_mouths,
+          id: uuidv4()
+        });
+        return dates;
+      }
+      // 年间隔大于1年
+      if (year_diff > 1) {
+        for (let i = 1; i < year_diff; i++) {
+          let item_year = start_year + i;
+          let isLeap = this.isLeap(item_year);
+          let month_and_day = this.generationMonths(
+            item_year,
+            1,
+            13,
+            isLeap,
+            false
+          );
+          dates.push({
+            name: `${item_year}年`,
+            date: item_year,
+            id: uuidv4(),
+            children: month_and_day
+          });
+        }
+        dates.push({
+          name: `${end_year}年`,
+          date: item_year,
+          children: end_mouths,
+          id: uuidv4()
+        });
+        return dates;
+      }
+    },
+    /**
+     * 年-周模式gantt标题
+     * start_year: 起始年
+     * start_mouth：起始月
+     * end_year：结束年
+     * end_mouth：结束月
+     */
+    yearAndWeekTitleDate(start_year, start_mouth, end_year, end_mouth) {
+      // 处理年份
+      let year_diff = end_year - start_year;
+      // 只存在同年或前后年的情况
+      if (year_diff === 0) {
+        // 年间隔为同一年
+        let isLeap = this.isLeap(start_year); // 是否闰年
+        let mouths = this.generationMonths(
+          start_year,
+          start_mouth,
+          end_mouth + 1,
+          isLeap,
+          true,
+          true
+        ); // 处理月份
+        return mouths;
+      }
+      // 处理开始月份
+      let startIsLeap = this.isLeap(start_year);
+      let start_mouths = this.generationMonths(
+        start_year,
+        start_mouth,
+        13,
+        startIsLeap,
+        true,
+        true
+      );
+      // 处理结束月份
+      let endIsLeap = this.isLeap(end_year);
+      let end_mouths = this.generationMonths(
+        end_year,
+        1,
+        end_mouth + 1,
+        endIsLeap,
+        true,
+        true
+      );
+      return start_mouths.concat(end_mouths);
+    },
+    /**
+     * 月-日模式gantt标题
+     * start_year: 起始年
+     * start_mouth：起始月
+     * end_year：结束年
+     * end_mouth：结束月
+     */
+    mouthAndDayTitleDate(start_year, start_mouth, end_year, end_mouth) {
+      // 处理年份
+      let year_diff = end_year - start_year;
+      // 只存在同年或前后年的情况
+      if (year_diff === 0) {
+        // 年间隔为同一年
+        let isLeap = this.isLeap(start_year); // 是否闰年
+        let mouths = this.generationMonths(
+          start_year,
+          start_mouth,
+          end_mouth + 1,
+          isLeap
+        ); // 处理月份
+        return mouths;
+      }
+      // 处理开始月份
+      let startIsLeap = this.isLeap(start_year);
+      let start_mouths = this.generationMonths(
+        start_year,
+        start_mouth,
+        13,
+        startIsLeap
+      );
+      // 处理结束月份
+      let endIsLeap = this.isLeap(end_year);
+      let end_mouths = this.generationMonths(
+        end_year,
+        1,
+        end_mouth + 1,
+        endIsLeap
+      );
+      return start_mouths.concat(end_mouths);
+    },
+    /**
      * 生成月份函数
      * year: Number 当前年份
-     * isLeap: boolean 是否闰年
+     * start_num: Number 开始月分
+     * end_num：Number 结束月份
+     * isLeap: Boolean 是否闰年
+     * insert_days: Boolean 是否需要插入 日
+     * week: 是否以周的间隔
      */
-    generationMonths(year, isLeap) {
+    generationMonths(
+      year,
+      start_num = 1,
+      end_num = 13,
+      isLeap = false,
+      insert_days = true,
+      week = false
+    ) {
       let months = [];
-      for (let i = 1; i < 13; i++) {
-        let days = this.generationDays(year, i, isLeap);
+      if (insert_days) {
+        // 无需 日 的模式
+        for (let i = start_num; i < end_num; i++) {
+          // 需要 日 的模式
+          let days = this.generationDays(year, i, isLeap, week);
+          months.push({
+            name: `${i}月`,
+            date: i,
+            full_date: `${year}-${i}`,
+            children: days,
+            id: uuidv4()
+          });
+        }
+        return months;
+      }
+      for (let i = start_num; i < end_num; i++) {
+        // 需要 日 的模式
         months.push({
           name: `${i}月`,
           date: i,
           full_date: `${year}-${i}`,
-          children: days,
           id: uuidv4()
         });
       }
@@ -360,20 +675,37 @@ export default {
      * 生成日期函数
      * year: Number 当前年份
      * month: Number 当前月份
-     * isLeap: boolean 是否闰年
+     * isLeap: Boolean 是否闰年
+     * week: Boolean 是否间隔一周
      */
-    generationDays(year, month, isLeap) {
+    generationDays(year, month, isLeap = false, week = false) {
       let big_month = [1, 3, 5, 7, 8, 10, 12].includes(month);
       let small_month = [4, 6, 9, 11].includes(month);
       let dates_num = big_month ? 32 : small_month ? 31 : isLeap ? 30 : 29;
       let days = [];
-      for (let i = 1; i < dates_num; i++) {
-        days.push({
-          date: i,
-          name: `${i}日`,
-          id: uuidv4(),
-          full_date: `${year}-${month}-${i}`
-        });
+      if (week) {
+        let _day = 1; // 从周日开始
+        let _start_day_inweek = this.timeInWeek(`${year}-${month}-1`);
+        if (_start_day_inweek !== 0) {
+          _day = 8 - _start_day_inweek;
+        }
+        for (let i = _day; i < dates_num; i += 7) {
+          days.push({
+            date: i,
+            name: `${i}日`,
+            id: uuidv4(),
+            full_date: `${year}-${month}-${i}`
+          });
+        }
+      } else {
+        for (let i = 1; i < dates_num; i++) {
+          days.push({
+            date: i,
+            name: `${i}日`,
+            id: uuidv4(),
+            full_date: `${year}-${month}-${i}`
+          });
+        }
       }
       return days;
     },
@@ -447,13 +779,19 @@ export default {
     timeFormat(date, format = "YYYY-MM-DD") {
       return dayjs(date).format(format);
     },
+    /**
+     * 查询时间是周几
+     */
+    timeInWeek(date) {
+      return dayjs(date).day();
+    },
     // 以下为输出数据函数 --------------------------------------------------------------输出数据------------------------------------
     emitTimeChange(item) {
       this.$emit("timeChange", item);
-      this.$nextTick(()=>{
+      this.$nextTick(() => {
         this.$set(item, "_oldStartDate", item[this.selfProps.startDate]);
         this.$set(item, "_oldEndDate", item[this.selfProps.endDate]);
-      })
+      });
     },
     // 处理外部数据 ---------------------------------------------------------------原始数据处理-------------------------------------
     handleData(data, parent = null, level = 0) {
@@ -503,6 +841,11 @@ export default {
         }
         // 处理前置任务
         this.handlePreTask(i);
+        if (!i.hasOwnProperty("_start_edit")) {
+          // 添加编辑字段管理可编辑项的显示
+          this.$set(i, "_start_edit", false);
+          this.$set(i, "_end_edit", false);
+        }
       });
     },
     // 取父节点开始时间给早于父节点开始时间的子节点
@@ -624,10 +967,69 @@ export default {
         }
         // 处理前置任务
         this.handlePreTask(i);
+        if (!i.hasOwnProperty("_start_edit")) {
+          // 添加编辑字段管理可编辑项的显示
+          this.$set(i, "_start_edit", false);
+          this.$set(i, "_end_edit", false);
+        }
       });
-    }
+    },
+    // el-table事件----------------------------------------------以下为原el-table事件输出------------------------------------------------
+    handleSelectionChange(val) {
+      this.$emit("selection-change", val);
+      this.multipleSelection = val;
+    }, // 当选择项发生变化时会触发该事件
+    handleCurrentChange(val, oldVal) {
+      this.$emit("current-change", val, oldVal);
+      this.currentRow = val;
+    }, // 当表格的当前行发生变化的时候会触发该事件
+    handleSelectAll(val) {
+      this.$emit("select-all", val);
+    }, // 当用户手动勾选全选 Checkbox 时触发的事件
+    handleSelect(selection, row) {
+      this.$emit("select", selection, row);
+    }, // 当用户手动勾选全选 Checkbox 时触发的事件
+    handleMouseEnter(row, column, cell, event) {
+      this.$emit("cell-mouse-enter", row, column, cell, event);
+    }, // 当单元格 hover 进入时会触发该事件
+    handleMouseLeave(row, column, cell, event) {
+      this.$emit("cell-mouse-leave", row, column, cell, event);
+    }, // 当单元格 hover 退出时会触发该事件
+    handleCellClick(row, column, cell, event) {
+      this.$emit("cell-click", row, column, cell, event);
+    }, // 当某个单元格被点击时会触发该事件
+    handleCellDbClick(row, column, cell, event) {
+      this.$emit("cell-dblclick", row, column, cell, event);
+    }, // 当某个单元格被双击击时会触发该事件
+    handleRowClick(row, column, event) {
+      this.$emit("row-click", row, column, event);
+    }, // 当某一行被点击时会触发该事件
+    handleRowContextMenu(row, column, event) {
+      this.$emit("row-contextmenu", row, column, event);
+    }, // 当某一行被鼠标右键点击时会触发该事件
+    handleRowDbClick(row, column, event) {
+      this.$emit("row-dblclick", row, column, event);
+    }, // 当某一行被双击时会触发该事件
+    handleHeaderClick(column, event) {
+      this.$emit("header-click", column, event);
+    }, // 当某一列的表头被点击时会触发该事件
+    handleHeaderContextMenu(column, event) {
+      this.$emit("header-contextmenu", column, event);
+    }, // 当某一列的表头被鼠标右键点击时触发该事件
+    handleSortChange(e) {
+      this.$emit("sort-change", e);
+    }, // 当表格的排序条件发生变化的时候会触发该事件
+    handleFilterChange(filters) {
+      this.$emit("filter-change", filters);
+    }, // 当表格的筛选条件发生变化的时候会触发该事件
+    handleExpandChange(row, expanded) {
+      this.$emit("expand-change", row, expanded);
+    } // 当表格的筛选条件发生变化的时候会触发该事件
   },
   watch: {
+    dateType(val) {
+      this.self_date_type = val;
+    },
     startDate(val) {
       this.self_start_date = val;
     },
@@ -636,6 +1038,7 @@ export default {
     }
   },
   created() {
+    this.self_date_type = this.dateType;
     this.self_start_date = this.startDate;
     this.self_end_date = this.endDate;
   }
